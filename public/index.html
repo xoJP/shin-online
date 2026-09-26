@@ -265,6 +265,7 @@ button:focus-visible{outline:1px dashed var(--amber);outline-offset:2px;}
 .panel.narrow{flex-direction:column;align-items:center;gap:8px;padding:20px 28px;}
 .panel.narrow h2{margin:0 0 8px;font-size:16px;}
 .kicker{margin:0;font-size:9px;letter-spacing:.4em;color:var(--blood);}
+.res-net{margin:4px 0 0;font-size:7.5px;letter-spacing:.24em;color:var(--amber);}
 
 /* play / online menus */
 .sub-h{position:absolute;top:42px;left:0;right:0;margin:0;text-align:center;font:700 28px/1 var(--disp);letter-spacing:.3em;padding-left:.3em;text-shadow:0 3px 0 var(--blood);}
@@ -2342,7 +2343,7 @@ const SEQ={
       [null,{name:'Cross Cut',su:8,ac:4,re:18,vx:[0,0,0],noLunge:true,nk:'cross',cutA:-.7,fx:'cut',
         windup:{t:-8,h:-12,aF:[166,-4],aB:[158,-6],lF:[22,-30],lB:[-18,-16]},strike:{t:18,h:-4,rx:3,aF:[66,-32],aB:[112,-42],lF:[42,-46],lB:[-28,-14]},post:{t:12,h:-4,rx:2,aF:[60,-20],aB:[96,-30],lF:[38,-42],lB:[-26,-14]},
         hit:{limbs:['handF'],r:12,off:100,dmg:30,kb:[3,-1.4],stun:24,stop:10}}]]},
-    /* ○ CORRUPTION — threads and crystal thorns: from his hand, from the floor, out of his own body */
+    /* ○ CORRUPTION — close range: threads and crystal thorns from his hand, the floor at his feet, his own body */
     h:{name:'CORRUPTION',m:[
       [null,{name:'Threads',su:6,ac:4,re:12,vx:[0,0,0],noLunge:true,nk:'thread',fx:'corrupt',
         windup:{t:2,h:-4,aF:[50,96],aB:[40,100],lF:[22,-28],lB:[-18,-16]},strike:{t:10,h:-6,rx:2,aF:[96,-10],aB:[86,-4],lF:[32,-34],lB:[-22,-12]},post:{t:8,h:-5,aF:[88,0],aB:[80,4],lF:[28,-32],lB:[-20,-14]},
@@ -2369,7 +2370,9 @@ const SEQ={
         hit:{limbs:['handF'],r:14,off:100,dmg:38,kb:[4,-2],stun:24,stop:11}}]]}}
 };
 /* Kamo is a long-range fighter: his cuts open up a step away from him — a foe pressed right against him is inside the cut (only Thorn Back, out of his own body, still hits up close) */
-for(const b in SEQ.kamo)for(const r of SEQ.kamo[b].m)for(const mv of r)if(mv&&mv.hit){mv.hit.minR=100;mv.hit.off=230;mv.hit.maxR=196;mv.hit.dmg=Math.round(mv.hit.dmg*.92);}
+for(const b in SEQ.kamo){if(b==='h')continue;for(const r of SEQ.kamo[b].m)for(const mv of r)if(mv&&mv.hit){mv.hit.minR=100;mv.hit.off=230;mv.hit.maxR=196;mv.hit.dmg=Math.round(mv.hit.dmg*.92);}}
+/* …except ○ CORRUPTION: threads and thorns right at his body — the one string that keeps a rushdown off him */
+{const OFF=[40,34,30,36];SEQ.kamo.h.m.forEach((r,ri)=>r.forEach(mv=>{if(mv&&mv.hit){mv.hit.off=OFF[ri]!=null?OFF[ri]:34;mv.hit.r+=2;}}));}
 for(const id in SEQ){const D=DEFS[id];D.seq={};
   for(const b in SEQ[id]){const q=SEQ[id][b],ids=[],n=q.m.length;
     q.m.forEach(([base,ov],i)=>{const nid=b+'.'+(i+1),src=base?D.moves[base]:{};
@@ -2440,7 +2443,7 @@ const STA_COST={j:10,h:14,t:12,dir:8,air:6,dash:10,link:3,jump:5,djump:5};
 /* LUNGE ASSIST: if the opponent is a bit too far for a combo hit, the fighter dashes in automatically so it connects */
 const LUNGE_MAX=120,LUNGE_CHAIN=70;
 const PARRY_WIN=7,PARRY_LOCK=22,PARRY_HEAL=.06,PARRY_STUN=30;
-const BLOWN_T=44;   // frames a white-hole blast flings someone in a straight, fast line
+const BLOWN_T=24;   // frames a white-hole blast flings someone in a straight, fast line
 const JUMP_BUF=8,DASH_INV_FWD=8,DASH_INV_BACK=10,CHIP=.1,DOWN_T=34,RISE_T=14,JUGGLE_GRAV=.78;
 /* Shin reservoir: every fighter fills a full reservoir after dealing SHIN_FULL damage,
    so a smaller reservoir (Kaito 6) has bigger points than a larger one (Akito 8). */
@@ -2709,7 +2712,7 @@ if(this.state!==s){this.state=s;this.st=0;}}
       this.setState(this.grounded?'idle':'air');}
   }
   physics(){
-    if(this.blown>0)this.blown--;
+    if(this.blown>0){this.blown--;if(this.blown===0&&!this.grounded&&Math.abs(this.vx)>5)this.vx*=.35;}   // the blast's straight line ends: the flight loses its speed
     if(this.wallBn>0){this.wallBn--;if(this.state!=='hit')this.wallBn=0;else{this.vx*=.965;if(Math.abs(this.vy)<1.6)this.vy-=this.S.grav*.5;}}   // the rebound hangs in the air for a moment
     if(!this.grounded&&this.pull<=0&&this.state!=='airdash'&&!(this.state==='special'&&this.sp&&this.sp.noGrav)){this.vy+=this.S.grav*((this.state==='hit'||this.state==='ko')&&this.blown>0?.05:this.state==='hit'?JUGGLE_GRAV:1);if(this.vy>11)this.vy=11;}
     this.x+=this.vx;this.y+=this.vy;
@@ -2810,9 +2813,17 @@ function shadow(g,x,y,fy){const h=Math.max(0,FLOOR-fy),w=Math.max(10,28-h*.16);g
    ===================================================================== */
 function pxR(g,x,y){g.fillRect(Math.round(x),Math.round(y),1,1);}
 function discP(g,x,y,r){const R0=Math.floor(r);for(let dy=-R0;dy<=R0;dy++){const w=Math.floor(Math.sqrt(Math.max(0,r*r-dy*dy)));g.fillRect(Math.round(x)-w,Math.round(y)+dy,w*2+1,1);}}
-function lineP(g,x0,y0,x1,y1){x0=Math.round(x0);y0=Math.round(y0);x1=Math.round(x1);y1=Math.round(y1);
-  const dx=Math.abs(x1-x0),dy=-Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1;let e=dx+dy;
-  for(let k=0;k<400;k++){g.fillRect(x0,y0,1,1);if(x0===x1&&y0===y1)break;const e2=2*e;if(e2>=dy){e+=dy;x0+=sx;}if(e2<=dx){e+=dx;y0+=sy;}}}
+function lineP(g,x0,y0,x1,y1){x0=Math.round(x0);y0=Math.round(y0);x1=Math.round(x1);y1=Math.round(y1);   // same pixels as plain Bresenham, drawn as straight runs
+  const dx=Math.abs(x1-x0),dy=-Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1,xm=dx>=-dy;let e=dx+dy,rx=x0,ry=y0;
+  for(let k=0;k<400;k++){if(x0===x1&&y0===y1)break;const e2=2*e;let nx=x0,ny=y0;if(e2>=dy){e+=dy;nx+=sx;}if(e2<=dx){e+=dx;ny+=sy;}
+    if(xm?ny!==y0:nx!==x0){if(xm)g.fillRect(Math.min(rx,x0),ry,Math.abs(x0-rx)+1,1);else g.fillRect(rx,Math.min(ry,y0),1,Math.abs(y0-ry)+1);rx=nx;ry=ny;}
+    x0=nx;y0=ny;}
+  if(xm)g.fillRect(Math.min(rx,x0),ry,Math.abs(x0-rx)+1,1);else g.fillRect(rx,Math.min(ry,y0),1,Math.abs(y0-ry)+1);}
+/* a pixel buffer that looks like a 2d context to fillStyle/fillRect drawers — for heavy one-off pictures */
+function pxCtx(w,h,ox,oy){const P=new Uint32Array(w*h);let col=0;const cache={};
+  return{set fillStyle(v){col=cache[v]||(cache[v]=C(v));},get fillStyle(){return'';},
+    fillRect(x,y,ww,hh){x=Math.round(x-ox);y=Math.round(y-oy);const x0=Math.max(0,x),x1=Math.min(w,x+ww),y1=Math.min(h,y+hh);for(let j=Math.max(0,y);j<y1;j++){const r=j*w;for(let i=x0;i<x1;i++)P[r+i]=col;}},
+    canvas(){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d'),id=g.createImageData(w,h);new Uint32Array(id.data.buffer).set(P);g.putImageData(id,0,0);return c;}};}
 function lineA(g,x0,y0,x1,y1){let t0=0,t1=1;const dx=x1-x0,dy=y1-y0;   // a long line, clipped to the screen first
   for(const[p,q]of[[-dx,x0+4],[dx,W+4-x0],[-dy,y0+4],[dy,H+4-y0]]){if(p===0){if(q<0)return;continue;}const r=q/p;if(p<0){if(r>t1)return;if(r>t0)t0=r;}else{if(r<t0)return;if(r<t1)t1=r;}}
   const ax=x0+dx*t0,ay=y0+dy*t0,bx=x0+dx*t1,by=y0+dy*t1,n=Math.ceil(Math.max(Math.abs(bx-ax),Math.abs(by-ay))/380);
@@ -3386,7 +3397,7 @@ class Menu{
   constructor(root,axis,onPick,onFocus){this.root=root;this.axis=axis;this.onPick=onPick;this.onFocus=onFocus;this.i=0;this.refresh();this.focus(0,true);}
   refresh(){this.items=[...this.root.querySelectorAll('[data-item]')].filter(b=>!b.hidden);          // hidden buttons drop out of the menu
     for(const b of this.items){if(b._menu===this)continue;b._menu=this;b.tabIndex=-1;
-      b.addEventListener('pointerenter',()=>{const k=this.items.indexOf(b);if(k>=0)this.focus(k);});
+      b.addEventListener('pointermove',()=>{const k=this.items.indexOf(b);if(k>=0&&k!==this.i)this.focus(k);});   // only a moving mouse takes the focus — not a menu popping up under a resting cursor
       b.addEventListener('click',e=>{e.preventDefault();if(fading)return;Snd.unlock();const k=this.items.indexOf(b);if(k<0)return;this.focus(k,true);this.pick();b.blur();});}
     if(this.i>=this.items.length)this.i=0;}
   focus(k,silent){const n=this.items.length;if(!n)return;k=(k+n)%n;if(k!==this.i&&!silent)Snd.play('menu');const changed=k!==this.i;this.i=k;
@@ -3423,7 +3434,7 @@ function selStage(st){Sel.stage=st;
   el.select.querySelectorAll('.tag-p1').forEach(e=>e.textContent=Game.watch?'CPU 1':'P1');el.select.querySelectorAll('.tag-cpu').forEach(e=>e.textContent=Game.watch?'CPU 2':'CPU');
   el.select.querySelectorAll('.card').forEach(c=>c.classList.toggle('p1',st===1&&c.dataset.item===Sel.p1));}
 const selMenu=new Menu(el.select,'x',id=>{
-  if(Sel.online){if(Net.st!=='select'||Net.pick)return;Net.pick=id;Sel.p1=id;Net.set({sel:id});SelNet.ui();Net.update();return;}
+  if(Sel.online){if(Net.st!=='select'||Net.pick)return;Net.pick=id;Sel.p1=id;Net.set({sel:{c:id,r:Net.round}});SelNet.ui();Net.update();return;}
   if(Sel.stage===0){Sel.p1=id;selStage(1);const k=Sel.ids.indexOf(id);const nk=Sel.ids.indexOf(Game.opp)>=0&&Game.opp!==id?Sel.ids.indexOf(Game.opp):(k+1)%Sel.ids.length;selMenu.focus(nk,true);Sel.demo[nk]=1;}
   else{Sel.p2=id;go(toStage);}},k=>{Sel.demo[k]=1;if(Sel.online&&Net.st==='select')Net.set({sh:k});});
 const pauseMenu=new Menu($('#pause .menu'),'y',(id,b)=>{
@@ -3481,9 +3492,9 @@ function showResult(){
   Game.sub='result';const w=Game.f.find(f=>f.hp>0);
   $('#resKicker').textContent=Game.watch?(w===Game.f[0]?'CPU 1 WINS':'CPU 2 WINS'):Game.online?(w===Game.f[Net.side]?'YOU WIN':'YOU LOSE'):w===Game.f[0]?'YOU WIN':'CPU WINS';
   if(Game.online){Net.st='result';Net.vote=null;Net.oppVote=null;Net.decided=false;Net.menuOpen=false;el.pause.hidden=true;$('#rm-main').textContent='LEAVE LOBBY';ResultNet.ui();}
-  else{$('#rm-rematch').textContent='REMATCH';$('#rm-select').textContent='CHARACTER SELECT';$('#rm-main').textContent='MAIN MENU';}
+  else{const e=$('#res-net');if(e)e.hidden=true;$('#rm-rematch').textContent='REMATCH';$('#rm-select').textContent='CHARACTER SELECT';$('#rm-main').textContent='MAIN MENU';}
   $('#winText').textContent=(w?w.def.name:'NOBODY')+' WINS';
-  el.result.hidden=false;resultMenu.focus(0,true);Game.lock=30;banner('');
+  el.result.hidden=false;resultMenu.focus(0,true);Game.lock=75;banner('');   // attack buttons still being mashed must not pick anything
 }
 function menuEvent(ev){
   if(fading||Game.lock>0)return;
@@ -3513,7 +3524,8 @@ $('#app').addEventListener('pointerdown',()=>{window.focus();Snd.unlock();});
 const _nativeRand=Math.random;let SEEDED=false,SEED_S=1;
 Math.random=function(){if(!SEEDED)return _nativeRand();SEED_S=(SEED_S+0x6D2B79F5)|0;let t=SEED_S;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};
 function vis(fn){const s=SEEDED;SEEDED=false;try{fn();}finally{SEEDED=s;}}      // purely visual work never touches the shared dice
-const NET_ALPH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',NET_CODE=/^[A-Z0-9]{4}$/;
+const NET_ALPH='ACDEFHJKMNPRTWXY3479',NET_CODE=/^[A-Z0-9]{4}$/;   // no look-alikes (B/8, S/5, Z/2, O/0, I/1, U/V, G/6) in new codes
+const codeKey=c=>String(c||'').toUpperCase().replace(/8/g,'B').replace(/5/g,'S').replace(/2/g,'Z').replace(/0/g,'O').replace(/1/g,'I').replace(/6/g,'G').replace(/V/g,'U');
 const NB=['l','r','u','d','b','uPress','attackPress','heavyPress','triPress','s1','s2','s1h','s2h','ult'],NPRESS=['uPress','attackPress','heavyPress','triPress','s1','s2','ult'];
 const NMASK=(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)|(1<<10)|(1<<13)|(1<<14)|(1<<15);   // one-shot presses: never repeated
 function nEnc(o){let v=0;for(let i=0;i<NB.length;i++)if(o[NB[i]])v|=1<<i;if(o.dash<0)v|=1<<14;else if(o.dash>0)v|=1<<15;return v;}
@@ -3523,8 +3535,9 @@ function netTake(i){if(Net.st!=='fight')return NEUTRAL;const a=Net.acc[i];if(!a)
 
 const Net={room:null,avail:null,conn:false,me:null,peers:[],P:{},st:'off',role:null,side:0,code:null,pub:false,opp:null,t0:0,
   pick:null,oppPick:null,oppHover:-1,map:null,oppMap:null,match:null,lastMid:0,decided:false,vote:null,oppVote:null,lastCk:-1,
-  D:6,f:0,sched:-1,myIn:new Map(),oppIn:new Map(),oppLast:-1,oppD:6,acc:[null,null],stallRun:0,stallSec:0,secT:0,calm:0,snaps:new Map(),desync:0,menuOpen:false,ready:false,
+  D:6,f:0,sched:-1,myIn:new Map(),oppIn:new Map(),oppLast:-1,oppD:6,acc:[null,null],stallRun:0,stallSec:0,secT:0,calm:0,pollT:0,snaps:new Map(),desync:0,menuOpen:false,ready:false,
   set(p){Object.assign(this.P,p);if(this.room)this.room.presence(p).catch(()=>{});},
+  get round(){return this.match?this.match.id:0;},          // picks and map votes belong to one round: a stale pick from last round never counts
   peer(id){return this.peers.find(p=>p.peer===id)||null;},
   clearP(){this.set({lob:null,jn:null,sel:null,sh:null,mp:null,m:null,in:null,rm:null,ck:null});},
   lobbies(){const out=new Set();for(const p of this.peers){const L=p.presence&&p.presence.lob;if(p.sameTab||!L||!L.p||L.g||typeof L.c!=='string'||!NET_CODE.test(L.c))continue;out.add(L.c);}return[...out].sort();},
@@ -3533,14 +3546,17 @@ const Net={room:null,avail:null,conn:false,me:null,peers:[],P:{},st:'off',role:n
     Object.assign(this,{st:'hosting',role:'host',side:0,code:c,pub,opp:null});this.clearP();this.set({lob:{c,p:pub?1:0,g:null}});Sub.show('host');},
   join(code){code=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);if(!this.room)return;
     if(!NET_CODE.test(code)){Sub.flash('ENTER THE 4-CHARACTER CODE');return;}
-    const h=this.peers.find(p=>!p.sameTab&&p.presence&&p.presence.lob&&p.presence.lob.c===code);
-    if(!h){Sub.flash('LOBBY '+code+' NOT FOUND');return;}
+    const h=this.peers.find(p=>!p.sameTab&&p.presence&&p.presence.lob&&typeof p.presence.lob.c==='string'&&codeKey(p.presence.lob.c)===codeKey(code));
+    if(!h){if(!this._jr||this._jr.code!==code){this._jr={code,t:performance.now()};}                  // give a fresh lobby a moment to show up
+      if(performance.now()-this._jr.t<3000){Sub.flash('LOOKING FOR LOBBY '+code+'…',true);setTimeout(()=>{if(Game.mode==='sub'&&Sub.scr==='join')this.join(code);},500);return;}
+      this._jr=null;Sub.flash('LOBBY '+code+' NOT FOUND · CHECK THE CODE (SAME LINK AS YOUR FRIEND?)');return;}
+    this._jr=null;code=h.presence.lob.c;
     if(h.presence.lob.g&&h.presence.lob.g!==this.me){Sub.flash('LOBBY '+code+' IS FULL');return;}
     Object.assign(this,{st:'joining',role:'guest',side:1,code,opp:h.peer,t0:performance.now()});this.clearP();this.set({jn:code});Sub.show('joining');},
   leave(){if(this.st==='off')return;this.st='off';this.opp=null;this.role=null;this.ready=false;this.menuOpen=false;Game.online=false;this.clearP();$('#netmsg').hidden=true;},
   lost(msg){this.leave();goSoon(()=>{Sub.show('online',msg);Snd.play('deny');});},
   enterSelect(){Object.assign(this,{st:'select',pick:null,oppPick:null,oppHover:-1,map:null,oppMap:null,decided:false,vote:null,oppVote:null,ready:false,menuOpen:false});
-    Game.online=false;$('#netmsg').hidden=true;this.set({sel:null,sh:null,mp:null,rm:null,in:null,ck:null});goSoon(toSelect);},
+    Game.online=false;$('#netmsg').hidden=true;this.set({sel:null,sh:null,mp:null,in:null,ck:null});goSoon(toSelect);},   // my vote stays up: the rival may not have seen it yet
   enterStage(){this.st='stage';this.map=null;this.oppMap=null;this.decided=false;this.set({mp:null});goSoon(toStage);},
   newMatch(a,b,s){const m={id:this.lastMid+1+((_nativeRand()*40)|0),seed:(_nativeRand()*2147483647)|0,a,b,s};this.set({m});this.startMatch(m);},
   startMatch(m){Object.assign(this,{match:m,lastMid:m.id,st:'fight',ready:false,vote:null,oppVote:null,decided:false,f:0,oppLast:-1,oppD:6,stallRun:0,desync:0,lastCk:-1,acc:[null,null],menuOpen:false});
@@ -3557,9 +3573,9 @@ const Net={room:null,avail:null,conn:false,me:null,peers:[],P:{},st:'off',role:n
       else if(!L||L.c!==this.code)this.lost('THAT LOBBY WAS CLOSED');else if(L.g&&L.g!==this.me)this.lost('THAT LOBBY IS FULL');return;}
     if(this.role==='guest'){const L=O.lob;if(!L||L.c!==this.code||L.g!==this.me){this.lost('THE HOST CLOSED THE LOBBY');return;}}
     else if(O.jn!==this.code){this.lost('YOUR RIVAL LEFT THE LOBBY');return;}
-    this.oppPick=typeof O.sel==='string'&&Sel.ids.includes(O.sel)?O.sel:null;
+    this.oppPick=O.sel&&typeof O.sel==='object'&&O.sel.r===this.round&&Sel.ids.includes(O.sel.c)?O.sel.c:null;
     this.oppHover=Number.isInteger(O.sh)?O.sh:-1;
-    this.oppMap=typeof O.mp==='string'&&STAGE_IDS.includes(O.mp)?O.mp:null;
+    this.oppMap=O.mp&&typeof O.mp==='object'&&O.mp.r===this.round&&STAGE_IDS.includes(O.mp.s)?O.mp.s:null;
     this.oppVote=O.rm&&this.match&&O.rm.i===this.match.id&&(O.rm.v==='re'||O.rm.v==='sel')?O.rm.v:null;
     if(s==='select'){SelNet.ui();if(this.pick&&this.oppPick&&Game.mode==='select')this.enterStage();}
     else if(s==='stage'){StageSel.ui();
@@ -3567,6 +3583,7 @@ const Net={room:null,avail:null,conn:false,me:null,peers:[],P:{},st:'off',role:n
         let st=this.map===this.oppMap?this.map:(_nativeRand()<.5?this.map:this.oppMap);if(st==='random')st=_nativeRand()<.5?'shinjuku':'pit';
         this.newMatch(this.pick,this.oppPick,st);return;}}
     else if(s==='result'){ResultNet.ui();
+      if(this.vote&&this.oppVote&&this.vote!==this.oppVote){this.enterSelect();return;}          // one wants a rematch, one wants to switch: switching wins, nobody is left hanging
       if(this.vote&&this.vote===this.oppVote){if(this.vote==='sel'){this.enterSelect();return;}
         if(this.role==='host'&&!this.decided){this.decided=true;const mm=this.match;this.newMatch(mm.a,mm.b,mm.s);return;}}}
     if(this.role==='guest'&&(s==='stage'||s==='result')){const m=O.m;
@@ -3595,7 +3612,8 @@ const Net={room:null,avail:null,conn:false,me:null,peers:[],P:{},st:'off',role:n
     const d=ck.s.map((v,i)=>+v-mine[i]);if(d.some(v=>!isFinite(v))||d.every(v=>Math.abs(v)<.02))return;
     this.desync++;const[a,b]=Game.f;a.x+=d[0];a.y+=d[1];b.x+=d[3];b.y+=d[4];                            // drifted apart: follow the host
     a.hp=clamp(a.hp+d[2],a.hp>0?1:0,a.S.hp);b.hp=clamp(b.hp+d[5],b.hp>0?1:0,b.S.hp);},
-  frame(){if(this.st!=='fight'||!Game.online||Game.mode!=='fight')return;
+  frame(){if(this.st!=='off'&&this.st!=='fight'&&++this.pollT>=20){this.pollT=0;this.update();}   // re-check the lobby now and then: nothing waits on a missed message
+    if(this.st!=='fight'||!Game.online||Game.mode!=='fight')return;
     const e=$('#netmsg'),w=this.ready&&this.stallRun>24;if(w===e.hidden)e.hidden=!w;
     if(w){const t=this.stallRun>480?'RIVAL NOT RESPONDING · ESC TO LEAVE':'WAITING FOR RIVAL…';if(e.textContent!==t)e.textContent=t;}
     if(++this.secT>=60){this.secT=0;if(this.stallSec>6&&this.D<14){this.D++;this.calm=0;}else if(!this.stallSec&&++this.calm>=5&&this.D>4){this.D--;this.calm=0;}if(this.stallSec)this.calm=0;this.stallSec=0;}}
@@ -3666,7 +3684,7 @@ const Sub={scr:null,menu:null,msg:'',sig:'',
     if(this.scr==='online')p.textContent=Net.avail===false?'ONLINE NEEDS THE SHIN SERVER · OR CLAUDE (SHARED LINK, SIGNED IN)':far?'ONLINE SERVER NOT REACHABLE · RETRYING…':Net.avail===null||!Net.conn?'CONNECTING TO THE SERVER…':'CONNECTED · '+Math.max(0,Net.peers.length-1)+' OTHER PLAYER'+(Net.peers.length===2?'':'S')+' ONLINE';
     ns.textContent=Net.avail?(Net.conn?'● ONLINE':'○ CONNECTING'):'';
     if(this.scr==='join'||this.scr==='online')this.list(true);},
-  flash(t){this.msg=t;const m=$('#sub-msg');if(m)m.textContent=t;Snd.play('deny');},
+  flash(t,quiet){this.msg=t;const m=$('#sub-msg');if(m)m.textContent=t;if(!quiet)Snd.play('deny');},
   pick(id){const s=this.scr;if(id==='back')return this.back();
     if(s==='play'){if(id==='bot'){Game.watch=false;go(toSelect);}else if(id==='online')this.show('online');}
     else if(s==='online'){if(id==='create')this.show('create');else if(id==='join')this.show('join');}
@@ -3685,7 +3703,9 @@ const SelNet={ui(){if(Game.mode!=='select'||!Sel.online)return;const nm=id=>DEFS
   el.select.querySelectorAll('.card').forEach((c,k)=>{const id=c.dataset.item;c.classList.toggle('p1',id===Net.pick);
     c.classList.toggle('rv',Net.oppPick?id===Net.oppPick:k===Net.oppHover);c.classList.toggle('rvp',id===Net.oppPick);});}};
 const ResultNet={ui(){if(Game.mode!=='fight'||Net.st!=='result')return;const n=v=>(Net.vote===v?1:0)+(Net.oppVote===v?1:0);
-  $('#rm-rematch').textContent='REMATCH · '+n('re')+'/2';$('#rm-select').textContent='CHARACTER SELECT · '+n('sel')+'/2';}};
+  $('#rm-rematch').textContent='REMATCH · '+n('re')+'/2';$('#rm-select').textContent='CHARACTER SELECT · '+n('sel')+'/2';
+  const hint=Net.oppVote==='re'?'RIVAL WANTS A REMATCH':Net.oppVote==='sel'?'RIVAL WANTS TO SWITCH FIGHTERS':Net.vote?'WAITING FOR YOUR RIVAL…':'';let e=$('#res-net');
+  if(!e){e=document.createElement('p');e.id='res-net';e.className='res-net';$('#result .panel').appendChild(e);}e.textContent=hint;e.hidden=!hint;}};
 
 /* ---------- stage select (every mode) ---------- */
 const StageSel={ids:['shinjuku','pit','random'],i:0,shown:null,
@@ -3699,7 +3719,7 @@ const StageSel={ids:['shinjuku','pit','random'],i:0,shown:null,
   back(){if(Net.st==='stage'){if(Net.map){Net.map=null;Net.set({mp:null});this.ui();}return;}
     go(()=>{setMode('select');selStage(1);selMenu.focus(Math.max(0,Sel.ids.indexOf(Sel.p2)),true);});}};
 const stageMenu=new Menu($('#stagesel .st-row'),'x',id=>{
-  if(Net.st==='stage'){if(Net.map)return;Net.map=id;Net.set({mp:id});StageSel.ui();Net.update();return;}
+  if(Net.st==='stage'){if(Net.map)return;Net.map=id;Net.set({mp:{s:id,r:Net.round}});StageSel.ui();Net.update();return;}
   Game.stage=id;try{localStorage.setItem('shin.stage',id);}catch(e){}const p=Sel.p1,o=Sel.p2;go(()=>toFight(p,o));},k=>{StageSel.i=k;});
 function toStage(){setMode('stagesel');const k=Net.st==='stage'?0:Math.max(0,StageSel.ids.indexOf(Game.stage||'shinjuku'));stageMenu.focus(k,true);StageSel.i=k;StageSel.ui();}
 function renderStageSel(g){const id0=StageSel.ids[StageSel.i],id=id0==='random'?(((Game.frame/150)|0)%2?'pit':'shinjuku'):id0;
@@ -3784,7 +3804,7 @@ function hazardHit(att,vic,o){
     if(o.blast){const w=vic.S.weight;vic.vx=(o.kbx||0)/w;vic.vy=(o.kby||0)/w;vic.blown=o.blast;Game.slow=0;Game.hitstop=Math.max(Game.hitstop,18);}   // slow-mo waits for the wall
     return true;}
   if(o.dmg>=30&&!o.kd){vic.stance+=5+dealt*.04;if(vic.stance>=STANCE_MAX){vic.stance=0;o=Object.assign({},o,{kd:true,kby:Math.min(o.kby||0,-3.4),kbx:o.kbx||att.facing*3});FX.dust(vic.x,FLOOR,10);}}
-  const w=vic.S.weight;vic.takeHit(att,{},(o.kbx||0)/w,(o.kby||0)/w,o.cx,o.stun,combo,o.kd);
+  const w=vic.S.weight,kx=o.blast?clamp(o.kbx||0,-13,13):(o.kbx||0);vic.takeHit(att,{},kx/w,(o.kby||0)/w,o.cx,o.stun,combo,o.kd);   // blasts fling hard, but not off the map
   if(o.blast){vic.blown=o.blast;Game.hitstop=Math.max(Game.hitstop,14);}   // a frozen beat on impact, then the fling
   return true;
 }
@@ -4420,7 +4440,7 @@ function slamOut(att,vic,base,dir,vy){                  // a Shiki finisher that
   const w=vic.S.weight;
   if(vic.hp<=0){koSequence(att,vic);Game.slow=0;}
   else Object.assign(vic,{move:null,sp:null,hidden:false,state:'hit',st:0,stun:40,kdForce:true,combo:1,pull:0,pendingKb:null});
-  vic.vx=dir*26/w;vic.vy=vy;vic.grounded=false;vic.launched=true;vic.blown=BLOWN_T;vic.facing=-dir;
+  vic.vx=dir*11/w;vic.vy=vy;vic.grounded=false;vic.launched=true;vic.blown=BLOWN_T;vic.facing=-dir;   // a strong throw — not across the whole arena
 }
 /* ---------- ITSUKI: lock-in beatdowns (once the first blow lands there is no escape) ---------- */
 function lockVic(o,f,keepFrozen){
@@ -4465,7 +4485,7 @@ const Shatter={on:false,t:0,c:null,sh:[],pend:null,x:0,y:0,col:'#ff3b3b',
   start(x,y,col){this.pend={x,y,col:col||'#ff3b3b'};},
   reset(){this.on=false;this.pend=null;this.sh.length=0;},
   capture(g,sx,sy){
-    const P=this.pend;this.pend=null;if(reduceMotion)return;
+    const P=this.pend;this.pend=null;                                  // always shown: it is the moment of the fight
     if(!this.c){this.c=document.createElement('canvas');this.c.width=W;this.c.height=H;}
     const cg=this.c.getContext('2d');cg.clearRect(0,0,W,H);cg.drawImage(cv,0,0);
     const NA=15,RS=[0,16,42,86,150,240,380,640];                // jittered polar grid: rings × spokes
@@ -4473,7 +4493,9 @@ const Shatter={on:false,t:0,c:null,sh:[],pend:null,x:0,y:0,col:'#ff3b3b',
     this.sh=[];
     const add=pts=>{let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1];}cx/=pts.length;cy/=pts.length;
       const dx=cx-sx,dy=cy-sy,d=Math.hypot(dx,dy)||1,sp=(1.5+rnd(0,2.5))*(1+50/(d+25));
-      this.sh.push({pts,cx,cy,vx:dx/d*sp,vy:dy/d*sp-rnd(.5,2.5),rv:rnd(-.07,.07),sc:rnd(.004,.014),gr:rnd(.1,.2),d});};
+      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of pts){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);}
+      x0=Math.max(0,Math.floor(x0)-2);y0=Math.max(0,Math.floor(y0)-2);x1=Math.min(W,Math.ceil(x1)+2);y1=Math.min(H,Math.ceil(y1)+2);
+      this.sh.push({bb:[x0,y0,Math.max(1,x1-x0),Math.max(1,y1-y0)],pts,cx,cy,vx:dx/d*sp,vy:dy/d*sp-rnd(.5,2.5),rv:rnd(-.07,.07),sc:rnd(.004,.014),gr:rnd(.1,.2),d});};
     for(let i=0;i<RS.length-1;i++)for(let k=0;k<NA;k++){const k2=(k+1)%NA;
       if(i===0)add([V[0][0],V[1][k],V[1][k2]]);
       else if(Math.random()<.45){add([V[i][k],V[i][k2],V[i+1][k2]]);add([V[i][k],V[i+1][k2],V[i+1][k]]);}   // some cells split in two
@@ -4490,8 +4512,8 @@ const Shatter={on:false,t:0,c:null,sh:[],pend:null,x:0,y:0,col:'#ff3b3b',
       if(s.cy+oy>H+120||s.cx+ox<-160||s.cx+ox>W+160)continue;
       g.save();g.translate(s.cx+ox,s.cy+oy);g.rotate(s.rv*k);const sc=1+s.sc*k;g.scale(sc,sc);g.translate(-s.cx,-s.cy);
       g.beginPath();g.moveTo(s.pts[0][0],s.pts[0][1]);for(let i=1;i<s.pts.length;i++)g.lineTo(s.pts[i][0],s.pts[i][1]);g.closePath();
-      g.save();g.clip();g.drawImage(this.c,0,0);
-      if(k>0){g.globalAlpha=Math.min(.14,k*.01);g.fillStyle='#ffffff';g.fillRect(0,0,W,H);}g.restore();   // glass catches the light as it turns
+      g.save();g.clip();const b=s.bb;if(b[2]>0&&b[3]>0&&b[0]<W&&b[1]<H)g.drawImage(this.c,b[0],b[1],b[2],b[3],b[0],b[1],b[2],b[3]);   // only the shard's own patch of the frozen frame
+      if(k>0){g.globalAlpha=Math.min(.14,k*.01);g.fillStyle='#ffffff';g.fillRect(b[0],b[1],b[2],b[3]);}g.restore();   // glass catches the light as it turns
       g.globalAlpha=t<HOLD?.9:.6;g.strokeStyle=t<HOLD&&s.d<60?this.col:'#ffffff';g.lineWidth=1;g.stroke();
       g.restore();}
     if(t<HOLD){g.globalCompositeOperation='lighter';g.globalAlpha=(1-t/HOLD)*.9;g.fillStyle=this.col;discP(g,this.x,this.y,10+t*.6);}
@@ -4724,11 +4746,21 @@ const Corr={cache:null,key:'',shards:null,
       const band=4+L*9;for(const[x0,dir]of(STAGE.ledge?[]:[[WALL_L,1],[WALL_R,-1]])){const gr=c.createLinearGradient(x0,0,x0+dir*band*2.2,0);gr.addColorStop(0,'rgba(10,3,16,.92)');gr.addColorStop(1,'rgba(10,3,16,0)');c.fillStyle=gr;c.fillRect(Math.min(x0,x0+dir*band*2.2),0,band*2.2,H);}
       if(L>=3){const gr=c.createLinearGradient(0,0,0,band*1.6);gr.addColorStop(0,'rgba(10,3,16,.85)');gr.addColorStop(1,'rgba(10,3,16,0)');c.fillStyle=gr;c.fillRect(VL,0,VR-VL,band*1.6);}
       c.globalAlpha=.8;for(const p of Game.corrP)nkPillarDraw(c,p,1);c.globalAlpha=1;             // spent pillars: part of the arena now
-      for(const s of this.shards)if(s.lv<=L)nkCrystal(c,s.x,s.y,s.a,s.len,s.w);}
+      const px=pxCtx(BW,H,VL,0);for(const s of this.shards)if(s.lv<=L)nkCrystal(px,s.x,s.y,s.a,s.len,s.w);c.setTransform(1,0,0,1,0,0);c.drawImage(px.canvas(),0,0);}
     g.drawImage(this.cache,VL,0);
     if(Game.frame%[6,4,3,2][L-1]===0){const s=this.shards[(Math.random()*this.shards.length)|0];if(s.lv<=L)FX.add({type:'mote',x:s.x+Math.cos(s.a)*s.len*.7,y:s.y+Math.sin(s.a)*s.len*.7,vy:-.3,life:20,c:Math.random()<.3?'#ff8cff':'#a24dff'});}}
 };
-function nkPillarDraw(g,p,k){const dx=p.tx-p.x0,dy=p.ty-p.y0,D=Math.hypot(dx,dy)||1,ux=dx/D,uy=dy/D,nx=-uy,ny=ux,L=(D+26)*k,Wd=28,R=mulberry(p.seed||7);
+function nkPillarCv(p){                                   // a pillar is thousands of pixel lines: draw it once, keep the picture
+  const key=p.x0+','+p.y0+','+p.tx+','+p.ty+','+(p.seed||7);if(p._cv&&p._ck===key)return p._cv;
+  const M=40,bx=Math.floor(Math.min(p.x0,p.tx)-M-30),by=Math.floor(Math.min(p.y0,p.ty)-M-30),bw=Math.ceil(Math.abs(p.tx-p.x0)+2*M+60),bh=Math.ceil(Math.abs(p.ty-p.y0)+2*M+60);
+  const px=pxCtx(Math.max(1,bw),Math.max(1,bh),bx,by);nkPillarRaw(px,p,1);const c=px.canvas();
+  p._cv={c,bx,by};p._ck=key;return p._cv;}
+function nkPillarDraw(g,p,k){const P=nkPillarCv(p);
+  if(k>=1){g.drawImage(P.c,P.bx,P.by);return;}
+  const dx=p.tx-p.x0,dy=p.ty-p.y0,D=Math.hypot(dx,dy)||1,ux=dx/D,uy=dy/D,nx=-uy,ny=ux,L=(D+60)*k,Wd=90;   // growing: reveal it from its root
+  g.save();g.beginPath();g.moveTo(p.x0+nx*Wd-ux*30,p.y0+ny*Wd-uy*30);g.lineTo(p.x0-nx*Wd-ux*30,p.y0-ny*Wd-uy*30);g.lineTo(p.x0-nx*Wd+ux*L,p.y0-ny*Wd+uy*L);g.lineTo(p.x0+nx*Wd+ux*L,p.y0+ny*Wd+uy*L);g.closePath();g.clip();
+  g.drawImage(P.c,P.bx,P.by);g.restore();}
+function nkPillarRaw(g,p,k){const dx=p.tx-p.x0,dy=p.ty-p.y0,D=Math.hypot(dx,dy)||1,ux=dx/D,uy=dy/D,nx=-uy,ny=ux,L=(D+26)*k,Wd=28,R=mulberry(p.seed||7);
   for(let i=0;i<17;i++){const o=(i/16-.5)*2*Wd,len=L*(.7+R()*.32),bx=p.x0+nx*o,by=p.y0+ny*o,ex=p.x0+ux*len+nx*o*.2,ey=p.y0+uy*len+ny*o*.2;
     nkCrystal(g,bx,by,Math.atan2(ey-by,ex-bx),Math.hypot(ex-bx,ey-by),4);}
   for(let i=0;i<6;i++){const t=.3+R()*.6,o=(R()-.5)*Wd*1.6,bx=p.x0+ux*L*t+nx*o,by=p.y0+uy*L*t+ny*o,a=Math.atan2(uy,ux)+(o>0?.7:-.7);nkCrystal(g,bx,by,a,10+R()*14,2);}}
@@ -4828,8 +4860,8 @@ Object.assign(HazK,{
           else{bleed(o.x,o.y-44,10+h.lv*6,Math.sign(ux)||1);Game.hitstop=Math.max(Game.hitstop,8+h.lv*2);
             if(h.last){slamOut(f,o,h.dmg,Math.sign(ux)||f.facing,Math.min(-2,uy*6-2));if(h.lv>=2)Game.impact={t:5+h.lv,x:o.x,y:o.y-44,col:'#a24dff'};}
             else{hazardHit(f,o,{dmg:h.dmg,stun:44,stop:8,cx:o.x,cy:o.y-44,col:'#bdb3ff',kbx:ux*7,kby:uy*5-2.4});o.kdForce=false;}}}}
-      if(h.t>=36){if(h.stay){Game.corrP.push({x0:h.x0,y0:h.y0,tx:h.tx,ty:h.ty,seed:(h.x0*7+h.ty*13+Game.frame)|0});}h.dead=true;}},
-    draw(){},drawOver(g,h){const k=h.grow;if(k<=0)return;nkPillarDraw(g,{x0:h.x0,y0:h.y0,tx:h.tx,ty:h.ty,seed:(h.x0*7+h.ty*13)|0},k);
+      if(h.t>=36){if(h.stay){Game.corrP.push(h.pic||{x0:h.x0,y0:h.y0,tx:h.tx,ty:h.ty,seed:(h.x0*7+h.ty*13)|0});}h.dead=true;}},
+    draw(){},drawOver(g,h){const k=h.grow;if(k<=0)return;const pp=h.pic||(h.pic={x0:h.x0,y0:h.y0,tx:h.tx,ty:h.ty,seed:(h.x0*7+h.ty*13)|0});nkPillarDraw(g,pp,k);
       if(h.t<14){g.save();g.globalCompositeOperation='lighter';g.globalAlpha=1-h.t/14;g.fillStyle='#b04dff';discP(g,h.tx,h.ty,10+h.t*2);g.restore();}}},
   nkPortal:{step(h){if(h.owner.sp!==h.sp||h.owner.state!=='special')h.dead=true;},draw(){},
     drawOver(g,h){for(const p of h.sp.portals){if(p.close)p.open=Math.max(0,p.open-.08);if(p.open<=0)continue;
@@ -5105,13 +5137,13 @@ const SN_HEAD={shinMul:.4,id:'h.head',btn:'h',fin:true,fx:'tear',hit:{limbs:['ha
 const SN_TOSS={shinMul:.4,id:'h.toss',btn:'h',fin:true,kd:true,fx:'tear',hit:{limbs:['handF'],dmg:40,kb:[5,-3.4],stun:26,stop:8}};
 function snHit(f,o,def,cx,cy){if(f.sp)f.sp.done=true;applyHit(f,o,{def,t:0,done:true,contact:true},cx,cy);}
 function snGrab(f,o){f.move=null;f.sp={sk:SN_GRAB,t:0,ph:'hold',pose:f.def.poseF.hold};f.setState('special');f.vx=0;f.atkBuf=0;f.triBuf=0;f.hvyBuf=0;
-  lockVic(o,f);o.hurtVar=1;o.stun=999;Snd.play('block');Snd.play('thud');setTag(f,'CLINCH','#ffb04a');}
+  lockVic(o,f);o.hurtVar=1;o.stun=999;o.grabbedBy=f;Snd.play('block');Snd.play('thud');setTag(f,'CLINCH','#ffb04a');}
 /* place a held victim so that the middle of their body sits exactly at (tx,ty) in the pose given */
 function snPlace(o,tx,ty,pose){o.grounded=false;o.vy=0;o.vx=0;const J=o.lastJ;let ex=0;
   if(J){const w=jW(o,J.at(J.d.to*.45,0)),ry=(o.poseOv&&o.poseOv.snRy)||0;o.x+=tx-w.x;let ny=o.y+ty-w.y+ry;if(ny>FLOOR-1){ex=ny-(FLOOR-1);ny=FLOOR-1;}o.y=ny;}else{o.x=tx;o.y=Math.min(FLOOR-1,ty+40);}
   o.poseOv=ex?Object.assign({},pose,{ry:(pose.ry||0)+ex,snRy:ex}):pose;}   // below the floor line: shift the drawing instead of the body
 const SN_GRAB={update(f,inp,hd){const sp=f.sp,o=f.opp,P=f.def.poseF,OP=o.def.poseF,d=f.facing;sp.t++;
-  const end=()=>{o.poseOv=null;if(o.state==='hit'&&o.stun>200)o.stun=12;f.sp=null;f.setState('idle');};
+  const end=()=>{o.poseOv=null;if(o.state==='hit'&&o.stun>200)o.stun=12;o.grabImm=Game.frame+100;o.grabbedBy=null;f.sp=null;f.setState('idle');};
   const lie=sp.lie||(sp.lie=Object.assign({},OP.ko,{rot:-90}));                                   // the victim, lying flat across her arms
   if(o.state==='ko'){end();return;}
   if(sp.ph==='hold'){lockVic(o,f);o.stun=999;sp.pose=P.hold;f.vx=0;                                   // she only moves if you tell her to
@@ -5478,7 +5510,8 @@ function checkHit(att,vic){
     if(!inside)continue;
     if(vic.isInvuln()||(vic.isLow()&&m.def.dir!=='down'&&!m.def.special)){        // dodged: leave a pale echo, attack keeps going
       if(!m.dodged){m.dodged=true;Ghost.snap(vic,'#e4e8ff');}return;}
-    if(m.def.grab){if(!vic.grounded||vic.state==='ko')return;m.done=true;m.contact=true;snGrab(att,vic);return;}   // Sunny's clinch can't be blocked
+    if(m.def.grab){if(!vic.grounded||vic.state==='ko'||vic.state==='hit'||vic.state==='down'||vic.state==='rise'||(vic.grabImm||0)>Game.frame)return;   // no grabs out of hitstun, and a moment of grab immunity after a clinch
+      m.done=true;m.contact=true;snGrab(att,vic);return;}   // Sunny's clinch can't be blocked
     m.done=true;const cx=clamp(wx,hb.x,hb.x+hb.w),cy=clamp(wy,hb.y,hb.y+hb.h);
     if(vic.state==='special'&&vic.sp&&vic.sp.counter&&vic.sp.t>=2&&vic.sp.t<=32&&!m.def.special){m.contact=true;m.blocked=true;vic.sp.sk.trigger(vic,att);return;}   // Mirage Counter
     if(vic.isBlocking()&&vic.grounded&&(att.x-vic.x)*vic.facing>=0&&!m.def.azfx){   // Anzai's smoke fists come from behind: a guard in front doesn't stop them
@@ -5586,6 +5619,8 @@ function fightStep(){
   if(Game.sub==='paused')return;
   const[a,b]=Game.f;
   if(Game.online)for(const f of Game.f)simJ(f);                  // online: joints come from the simulation, never from when a frame got drawn
+  for(const o of Game.f){const g=o.grabbedBy;if(g&&!(g.sp&&g.sp.sk===SN_GRAB&&g.state==='special')){   // Sunny got knocked out of her clinch: let go of the victim
+      o.grabbedBy=null;o.poseOv=null;o.pull=0;if(o.state==='hit'&&o.stun>200)o.stun=10;o.grabImm=Game.frame+100;if(o.state!=='ko'&&o.state!=='hit'){o.vx=0;}}}
   vis(()=>{FX.step();Ghost.step();});Hoops.step();Arena.step();vis(()=>{Shatter.step();ScreenCut.step();BloodFloor.step();});for(const f of Game.f)if(f.def.id==='anzai')azCig(f);
   for(const f of Game.f){for(const p of f.trail)p.age++;f.trail=f.trail.filter(p=>p.age<8);}
   if(Game.tipsT>0&&--Game.tipsT===0)el.tips.style.opacity=0;
@@ -5721,10 +5756,10 @@ function drawHoop(g,h,front){
   g.restore();
 }
 function focusLines(g,k){                                    // anime concentration lines
-  g.save();g.globalAlpha=.2*k;g.fillStyle='#ffffff';
+  g.save();g.globalAlpha=.2*k;g.strokeStyle='#ffffff';g.lineWidth=1;g.beginPath();          // one path, one stroke: cheap enough for every frame
   for(let i=0;i<44;i++){const a=Math.random()*6.283,r0=rnd(170,230),r1=r0+rnd(60,170);
-    lineP(g,W/2+Math.cos(a)*r0,H/2+Math.sin(a)*r0*.6,W/2+Math.cos(a)*r1,H/2+Math.sin(a)*r1*.6);}
-  g.restore();
+    g.moveTo(Math.round(W/2+Math.cos(a)*r0)+.5,Math.round(H/2+Math.sin(a)*r0*.6)+.5);g.lineTo(Math.round(W/2+Math.cos(a)*r1)+.5,Math.round(H/2+Math.sin(a)*r1*.6)+.5);}
+  g.stroke();g.restore();
 }
 const glowC=document.createElement('canvas');glowC.width=SW;glowC.height=SH;const glowG=glowC.getContext('2d');
 function drawGlow(g,f,col,str){                                  // bright outline around a buffed fighter
