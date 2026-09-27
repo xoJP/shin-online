@@ -154,6 +154,17 @@ function partner(id) {                         // the one other player this clie
   return null;
 }
 
+function teamOf(id) {                          // a Night Parade team lobby: everyone seated at the host's table (up to four)
+  const c = clients.get(id); if (!c) return null;
+  const p = c.pres; let L = null, host = null;
+  if (p.lob && p.lob.np) { L = p.lob; host = id; }
+  else if (typeof p.jn === 'string') for (const [k, o] of clients) if (o.pres.lob && o.pres.lob.np && o.pres.lob.c === p.jn) { L = o.pres.lob; host = k; break; }
+  if (!L || !Array.isArray(L.m)) return null;
+  const out = new Set(L.m.filter(x => typeof x === 'string').slice(0, 4)); out.add(host);
+  if (!out.has(id)) return [];
+  out.delete(id); return [...out];
+}
+
 function attach(conn) {
   let id = null, tokens = 300, last = Date.now();
   conn.onmessage = raw => {
@@ -187,7 +198,11 @@ function attach(conn) {
       if (JSON.stringify(next).length > MAX_PRES) return;               // too big: ignored
       c.pres = next;
       if (pubChanged) broadcast({ t: 'up', peer: id, presence: pub(next) }, id);
-      if (dir) { const pt = partner(id); if (pt) sendTo(pt, { t: 'dir', peer: id, f: dir }); }
+      if (dir) {
+        const tm = teamOf(id);
+        if (tm) { for (const t of tm) sendTo(t, { t: 'dir', peer: id, f: dir }); }
+        else { const pt = partner(id); if (pt) sendTo(pt, { t: 'dir', peer: id, f: dir }); }
+      }
     }
   };
   conn.onclose = () => {
