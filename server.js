@@ -15,10 +15,57 @@ const DIRECT = new Set(['in', 'ck']); // per-tick fight data: only the opponent 
 const GRACE_MS = 5000;              // a dropped connection keeps its seat this long
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json' };
 
+/* ---------- cloud saves: a 12-character code points at a save kept in Upstash Redis ----------
+   Env: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN (set them in the Render dashboard, never in the code).
+   POST /api/save {code?, data}  → {code}   (no code: a new one is made)
+   GET  /api/save/<CODE>         → {data}   GET /api/ping → {db} */
+const envClean = v => String(v || '').trim().replace(/^[A-Z_]+=/, '').replace(/^["']+|["']+$/g, '').trim();
+const DB_URL = envClean(process.env.UPSTASH_REDIS_REST_URL).replace(/\/+$/, '');
+const DB_TOKEN = envClean(process.env.UPSTASH_REDIS_REST_TOKEN);
+const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';           // no 0/O, 1/I: easy to read aloud and type
+const MAX_SAVE = 64 * 1024;
+const hits = new Map();
+function newCode() { const b = crypto.randomBytes(12); let c = ''; for (let i = 0; i < 12; i++) c += CODE_ABC[b[i] & 31]; return c; }
+function cleanCode(c) { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{12}$/.test(c) ? c : null; }
+async function db(cmd) {
+  const r = await fetch(DB_URL, { method: 'POST', headers: { authorization: 'Bearer ' + DB_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify(cmd) });
+  if (!r.ok) throw new Error('db ' + r.status); return (await r.json()).result;
+}
+function json(res, code, obj) { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(obj)); }
+function limited(req) {                           // 40 requests a minute per address is plenty for a player, far too few to guess codes
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(), now = Date.now();
+  let h = hits.get(ip); if (!h || now - h.t > 60000) { h = { t: now, n: 0 }; hits.set(ip, h); }
+  if (hits.size > 5000) for (const [k, v] of hits) if (now - v.t > 60000) hits.delete(k);
+  return ++h.n > 40;
+}
+async function api(req, res, url) {
+  if (url.pathname === '/api/ping') return json(res, 200, { db: !!(DB_URL && DB_TOKEN) });
+  if (!DB_URL || !DB_TOKEN) return json(res, 503, { error: 'no-db' });
+  if (limited(req)) return json(res, 429, { error: 'slow-down' });
+  try {
+    if (req.method === 'GET' && url.pathname.startsWith('/api/save/')) {
+      const code = cleanCode(url.pathname.slice(10)); if (!code) return json(res, 400, { error: 'bad-code' });
+      const v = await db(['GET', 'save:' + code]); if (!v) return json(res, 404, { error: 'not-found' });
+      return json(res, 200, { code, data: v });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/save') {
+      let body = ''; for await (const ch of req) { body += ch; if (body.length > MAX_SAVE + 512) return json(res, 413, { error: 'too-big' }); }
+      let o; try { o = JSON.parse(body); } catch (e) { return json(res, 400, { error: 'bad-json' }); }
+      if (typeof o.data !== 'string' || !o.data.length || o.data.length > MAX_SAVE) return json(res, 400, { error: 'bad-data' });
+      let code = o.code ? cleanCode(o.code) : null;
+      if (!code) { for (let i = 0; i < 5; i++) { const c = newCode(); if (!(await db(['EXISTS', 'save:' + c]))) { code = c; break; } } if (!code) return json(res, 500, { error: 'no-code' }); }
+      await db(['SET', 'save:' + code, o.data]);
+      return json(res, 200, { code });
+    }
+    return json(res, 404, { error: 'no-route' });
+  } catch (e) { console.error('api', e.message); return json(res, 502, { error: 'db-failed' }); }
+}
+
 /* ---------- static files ---------- */
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok ' + clients.size); return; }
+  if (url.pathname.startsWith('/api/')) { api(req, res, url); return; }
   let p = decodeURIComponent(url.pathname);
   if (p === '/' || p === '') p = '/index.html';
   const file = path.normalize(path.join(PUB, p));
