@@ -3785,7 +3785,7 @@ addEventListener('keydown',e=>{
     else if(e.code==='Escape'||e.code==='ArrowDown'||e.code==='ArrowUp'){e.preventDefault();e.target.blur();if(e.code!=='Escape'&&Sub.menu)Sub.menu.handle(e.code==='ArrowDown'?'down':'up');}
     return;}
   if(PREVENT.has(e.code))e.preventDefault();
-  Snd.unlock();if(e.repeat)return;
+  Snd.unlock(true);if(e.repeat)return;
   In.keys.add(e.code);if(e.code==='KeyJ')In.atk++;if(e.code==='KeyU')In.hvy++;if(e.code==='KeyI')In.tri++;if(e.code==='Space')In.jmp++;if(e.code==='KeyK')chordPress('k','K','L',()=>In.sk1++);if(e.code==='KeyL')chordPress('k','L','K',()=>In.sk2++);
   const ev=MENU_KEYS[e.code];if(ev)menuEvent(ev);
 });
@@ -3925,7 +3925,7 @@ class CPU{
 const SND_GAP={voidtick:.07,void:.06,beep:.085,swing:.05,menu:.03,hit:.035,kick:.035,flesh:.06,jump:.05,land:.06,chomp:.05,slice:.04,fire:.08,voidhit:.05};   // the sounds that come in bursts may not machine-gun
 const SND_BIG=new Set(['hole','holeclose','boom','ko','super','ultra','roar','void','white','level','shatter','burst','giant','portal']);
 const Snd={ac:null,on:true,vol:.8,last:{},recent:[],
-  unlock(){if(!this.ac){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const a=this.ac=new A();
+  unlock(gesture){if(!this.ac){if(!gesture&&/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)&&'ontouchend'in document)return;try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const a=this.ac=new A();
       const n=a.sampleRate|0,b=a.createBuffer(1,n,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=_nativeRand()*2-1;this.nb=b;
       this.master=a.createGain();this.master.gain.value=this.gainOf();
       const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.value=7600;lp.Q.value=.5;                       // no ice-pick highs
@@ -3939,7 +3939,11 @@ const Snd={ac:null,on:true,vol:.8,last:{},recent:[],
       this.rev=a.createConvolver();this.rev.buffer=ir;this.revIn=a.createGain();this.revIn.gain.value=.8;this.revIn.connect(this.rev);this.rev.connect(this.master);
       const cv=new Float32Array(256),k=1.7;for(let i=0;i<256;i++){const x=i/128-1;cv[i]=Math.tanh(x*k)/Math.tanh(k);}this.curve=cv;   // a soft saturation, never a fuzz
     }catch(e){this.ac=null;return;}}
-    if(this.ac.state==='suspended')this.ac.resume().catch(()=>{});},
+    if(this.ac.state!=='running')this.ac.resume().catch(()=>{});   // 'suspended' — or 'interrupted' on iPads after a call or the app switcher
+    if(gesture&&!this.kick){this.kick=1;try{const a=this.ac,src=a.createBufferSource();src.buffer=a.createBuffer(1,1,22050);src.connect(a.destination);src.start(0);}catch(e){}   // iOS: one silent sound inside a real touch wakes the audio
+      try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}   // play even with the iPad's silent switch on
+      try{const el=document.createElement('audio');el.setAttribute('playsinline','');el.loop=true;el.volume=0;el.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';const pr=el.play();if(pr)pr.catch(()=>{});this.keep=el;}catch(e){}}
+    if(gesture&&this.ac.state!=='running')this.kick=0;},
   gainOf(){return this.on?.8*this.vol*this.vol+.0001:0;},                                  // squared: the steps feel even to the ear
   setVol(v){this.vol=Math.round(Math.max(0,Math.min(1,v))*10)/10;this.on=this.vol>0;try{localStorage.setItem('shin.vol',String(this.vol));localStorage.setItem('shin.sound',this.on?'on':'off');}catch(e){}
     if(this.master)this.master.gain.setTargetAtTime(this.gainOf(),this.ac.currentTime,.03);sndLabels();},
@@ -4060,7 +4064,7 @@ class Menu{
   refresh(){this.items=[...this.root.querySelectorAll('[data-item]')].filter(b=>!b.hidden);          // hidden buttons drop out of the menu
     for(const b of this.items){if(b._menu===this)continue;b._menu=this;b.tabIndex=-1;
       b.addEventListener('pointermove',()=>{const k=this.items.indexOf(b);if(k>=0&&k!==this.i)this.focus(k);});   // only a moving mouse takes the focus — not a menu popping up under a resting cursor
-      b.addEventListener('click',e=>{e.preventDefault();if(fading)return;Snd.unlock();const k=this.items.indexOf(b);if(k<0)return;this.focus(k,true);this.pick();b.blur();});}
+      b.addEventListener('click',e=>{e.preventDefault();if(fading)return;Snd.unlock(true);const k=this.items.indexOf(b);if(k<0)return;this.focus(k,true);this.pick();b.blur();});}
     if(this.i>=this.items.length)this.i=0;}
   focus(k,silent){const n=this.items.length;if(!n)return;k=(k+n)%n;if(k!==this.i&&!silent)Snd.play('menu');const changed=k!==this.i;this.i=k;
     this.items.forEach((b,j)=>b.classList.toggle('on',j===k));if(this.onFocus&&(changed||!silent))this.onFocus(k);}
@@ -4237,7 +4241,10 @@ function menuEvent(ev){
   }
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&Game.mode==='rogue'&&RG.run&&RG.run.state==='play')RG.pause();if(document.hidden&&Game.mode==='fight'&&!Game.online&&(Game.sub==='play'||Game.sub==='intro'))pause();});
-$('#app').addEventListener('pointerdown',()=>{window.focus();Snd.unlock();});
+$('#app').addEventListener('pointerdown',()=>{window.focus();Snd.unlock(true);});
+/* tablets only let sound start inside a real touch or click — listen for every kind, anywhere on the page */
+for(const ev of['touchend','pointerup','click','keydown'])window.addEventListener(ev,()=>Snd.unlock(true),{capture:true,passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Snd.ac&&Snd.ac.state!=='running')Snd.ac.resume().catch(()=>{});});
 
 /* =====================================================================
    ONLINE — lobbies and lockstep netplay over the artifact's live room.
@@ -10861,7 +10868,7 @@ const RG={run:null,hot:[],ptr:null,hub:{tab:'f',i:0,si:0,ci:0,bi2:0,pi:0,pconf:n
     if(T.length<4)rgText(g,'FRIENDS JOIN WITH CODE '+Tm.code+'  ·  PLAY › ONLINE › JOIN',x+12,y+h-11,9,'#8f8aa8');},
   pointer(e,down){if(Game.mode!=='parade'&&Game.mode!=='rogue')return;if(RG_SV.open)return;const r=cv.getBoundingClientRect();if(!r.width)return;const x=(e.clientX-r.left)/r.width*RW,y=(e.clientY-r.top)/r.height*RH;
     if(!down){const L=this.ptr;if(!L){this.ptr={x,y};return;}if(Math.hypot(x-L.x,y-L.y)<6)return;this.ptr={x,y};if(performance.now()-(this.navT||0)<1500)return;}   // hover follows a real mouse move only, never over a controller or keyboard choice
-    for(let i=this.hot.length-1;i>=0;i--){const h=this.hot[i];if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){if(down){Snd.unlock();h.act&&h.act();}else if(h.hov)h.hov();return;}}}
+    for(let i=this.hot.length-1;i>=0;i--){const h=this.hot[i];if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){if(down){Snd.unlock(true);h.act&&h.act();}else if(h.hov)h.hov();return;}}}
 };
 addEventListener('keydown',e=>{if(e.repeat)return;if(e.target&&e.target.tagName==='INPUT')return;if(e.target&&e.target.tagName==='TEXTAREA')return;if(e.code==='KeyU'||e.code==='KeyI'||e.code==='KeyQ'||e.code==='KeyE'||e.code==='KeyR'||e.code==='KeyB'||e.code==='Tab'){if((Game.mode==='parade'||Game.mode==='rogue')&&e.code==='Tab')e.preventDefault();RG.key(e.code);}});
 $('#app').addEventListener('pointerdown',e=>RG.pointer(e,true));$('#app').addEventListener('pointermove',e=>RG.pointer(e,false));
