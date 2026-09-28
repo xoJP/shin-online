@@ -10,8 +10,9 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 8080;
 const PUB = path.join(__dirname, 'public');
 const MAX_MSG = 16 * 1024;          // biggest message a client may send
-const MAX_PRES = 8 * 1024;          // biggest presence object a client may hold
+const MAX_PRES = 12 * 1024;         // biggest presence object a client may hold (a team loadout carries the save's unlocks)
 const DIRECT = new Set(['in', 'ck']); // per-tick fight data: only the opponent gets it
+const TEST_LAG = +process.env.SHIN_TEST_LAG || 0, TEST_JIT = +process.env.SHIN_TEST_JIT || 0;   // local tests only
 const GRACE_MS = 5000;              // a dropped connection keeps its seat this long
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json' };
 
@@ -99,6 +100,7 @@ class Conn {
     sock.on('error', () => this.closed());
   }
   send(str) { if (this.open) { try { this.sock.write(frame(str)); } catch (e) { this.closed(); } } }
+  sendFrame(buf) { if (this.open) { try { this.sock.write(buf); } catch (e) { this.closed(); } } }
   ping() { if (this.open) this.sock.write(control(0x9)); }
   close() { if (this.open) { try { this.sock.write(control(0x8)); this.sock.end(); } catch (e) {} } this.closed(); }
   closed() { if (!this.open) return; this.open = false; try { this.sock.destroy(); } catch (e) {} if (this.onclose) this.onclose(); }
@@ -145,6 +147,8 @@ const clients = new Map(); // id -> {conn, pres, grace}
 const rid = () => crypto.randomBytes(9).toString('base64').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 12).padEnd(12, 'x');
 const pub = p => { const o = {}; for (const k in p) if (!DIRECT.has(k)) o[k] = p[k]; return o; };
 function sendTo(id, m) { const c = clients.get(id); if (c && c.conn) c.conn.send(JSON.stringify(m)); }
+let lobVer = 0;                                // bumps whenever anyone's public presence (lobbies, seats) changes
+function teamCached(id, c) { if (c.tv !== lobVer) { c.tm = teamOf(id); c.pt = c.tm ? null : partner(id); c.tv = lobVer; } return c.tm || (c.pt ? [c.pt] : []); }
 function broadcast(m, except) { const s = JSON.stringify(m); for (const [id, c] of clients) if (id !== except && c.conn) c.conn.send(s); }
 function partner(id) {                         // the one other player this client is in a lobby with
   const c = clients.get(id); if (!c) return null;
@@ -157,6 +161,7 @@ function partner(id) {                         // the one other player this clie
 function teamOf(id) {                          // a Night Parade team lobby: everyone seated at the host's table (up to four)
   const c = clients.get(id); if (!c) return null;
   const p = c.pres; let L = null, host = null;
+  if (p.tr && Array.isArray(p.tr.ro) && p.tr.ro.includes(id)) return p.tr.ro.filter(x => typeof x === 'string' && x !== id).slice(0, 3);   // a night in progress: its own roster, host or no host
   if (p.lob && p.lob.np) { L = p.lob; host = id; }
   else if (typeof p.jn === 'string') for (const [k, o] of clients) if (o.pres.lob && o.pres.lob.np && o.pres.lob.c === p.jn) { L = o.pres.lob; host = k; break; }
   if (!L || !Array.isArray(L.m)) return null;
@@ -183,25 +188,29 @@ function attach(conn) {
       if (c.grace) { clearTimeout(c.grace); c.grace = null; }
       c.conn = conn;
       conn.send(JSON.stringify({ t: 'hello', id, peers: [...clients].filter(([k]) => k !== id).map(([k, o]) => ({ peer: k, presence: pub(o.pres) })) }));
+      lobVer++;
       if (!resumed) broadcast({ t: 'up', peer: id, presence: {} }, id);
       return;
     }
     if (m.t === 'p' && m.patch && typeof m.patch === 'object' && !Array.isArray(m.patch)) {
       const c = clients.get(id); if (!c) return;
-      const next = Object.assign({}, c.pres); let pubChanged = false, dir = null;
+      let pubKeys = null, dir = null;
       for (const k of Object.keys(m.patch).slice(0, 32)) {
         if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-        const v = m.patch[k];
-        if (v === null) delete next[k]; else next[k] = v;
-        if (DIRECT.has(k)) (dir || (dir = {}))[k] = v; else pubChanged = true;
+        if (DIRECT.has(k)) (dir || (dir = {}))[k] = m.patch[k]; else (pubKeys || (pubKeys = [])).push(k);
       }
-      if (JSON.stringify(next).length > MAX_PRES) return;               // too big: ignored
-      c.pres = next;
-      if (pubChanged) broadcast({ t: 'up', peer: id, presence: pub(next) }, id);
-      if (dir) {
-        const tm = teamOf(id);
-        if (tm) { for (const t of tm) sendTo(t, { t: 'dir', peer: id, f: dir }); }
-        else { const pt = partner(id); if (pt) sendTo(pt, { t: 'dir', peer: id, f: dir }); }
+      if (pubKeys) {                                // lobby / seat / loadout changes: rare, checked and shown to everyone
+        const next = Object.assign({}, c.pres);
+        for (const k of pubKeys) { const v = m.patch[k]; if (v === null) delete next[k]; else next[k] = v; }
+        if (JSON.stringify(next).length <= MAX_PRES) { c.pres = next; lobVer++; broadcast({ t: 'up', peer: id, presence: next }, id); }
+      }
+      if (dir) {                                    // inputs, 60 a second per player: straight through, as little work as possible
+        const out = teamCached(id, c);
+        const buf = frame(JSON.stringify({ t: 'dir', peer: id, f: dir }));
+        for (const t of out) { const o = t && clients.get(t); if (!o || !o.conn) continue;
+          if (!TEST_LAG) { o.conn.sendFrame(buf); continue; }
+          const now = Date.now(), at = Math.max(o.lagT || 0, now + TEST_LAG + Math.random() * TEST_JIT); o.lagT = at; const cn = o.conn;   // tests only: a slow, jittery line
+          setTimeout(() => cn.sendFrame(buf), at - now); }
       }
     }
   };
@@ -209,7 +218,7 @@ function attach(conn) {
     if (!id) return;
     const c = clients.get(id); if (!c || c.conn !== conn) return;
     c.conn = null;
-    c.grace = setTimeout(() => { if (!c.conn) { clients.delete(id); broadcast({ t: 'left', peer: id }); } }, GRACE_MS);
+    c.grace = setTimeout(() => { if (!c.conn) { clients.delete(id); lobVer++; broadcast({ t: 'left', peer: id }); } }, GRACE_MS);
   };
 }
 
