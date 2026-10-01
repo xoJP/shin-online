@@ -1,24 +1,6 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0b0a10">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SHIN">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<script>
-/* SHIN as an app: the worker only on the real website (never in a preview frame or from a file) */
-(function(){var real=/^https?:$/.test(location.protocol)&&window.top===window;
-  if(real&&'serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
-  var ev=null,btn=null,standalone=window.matchMedia&&(matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches)||navigator.standalone;
-  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();ev=e;if(standalone||!real)return;
-    btn=document.createElement('button');btn.type='button';btn.id='appInstall';btn.textContent='APP INSTALLIEREN';
-    btn.style.cssText='position:fixed;right:12px;top:calc(10px + env(safe-area-inset-top,0px));z-index:99999;font:12px "DotGothic16",monospace;letter-spacing:.08em;color:#ff4d6a;background:rgba(11,10,16,.88);border:1px solid #ff4d6a;padding:7px 12px;cursor:pointer;box-shadow:0 0 12px rgba(255,77,106,.35)';
-    btn.onclick=function(){if(!ev)return;ev.prompt();ev.userChoice.then(function(){ev=null;if(btn)btn.remove();});};
-    var add=function(){if(document.body)document.body.appendChild(btn);else setTimeout(add,200);};add();
-    setTimeout(function(){if(btn&&btn.parentNode)btn.style.opacity='.75';},15000);});
-  window.addEventListener('appinstalled',function(){if(btn)btn.remove();ev=null;});})();
-</script>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script>/* the old SHIN app is switched off: remove its worker and saved copies */
+try{if('serviceWorker' in navigator)navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});}).catch(function(){});
+if(window.caches)caches.keys().then(function(ks){ks.forEach(function(k){if(/^shin-app/.test(k))caches.delete(k);});}).catch(function(){});}catch(e){}</script>
 </head><body>
 <meta charset="utf-8">
 <title>SHIN Arena</title>
@@ -3706,13 +3688,13 @@ const COMBO_CALL={4:'NICE',6:'GREAT',8:'BRUTAL',10:'SHIN COMBO!'};              
 /* STAMINA: combos, single attacks and dashes cost stamina; it refills after a short pause.
    COMBO_CD: after starting a button combo, that button rests for a moment. */
 const STA_MAX=100,STA_DELAY=24,STA_RAMP=12,STA_REGEN=.5,COMBO_CD=0;
-const FEEL={sprint:1.55,airHover:12,walk:1.6,cad:1.6,stop:.35,squat:2,land:2,fall:1.35,ff:9.5,air:1.4,airAcc:1.7,dashCD:.6,hs:.6,hsMin:3,staMove:.5,
+const FEEL={airDashD:1.75,sprint:1.55,airHover:12,walk:1.6,cad:1.6,stop:.35,squat:2,land:2,fall:1.35,ff:9.5,air:1.4,airAcc:1.7,dashCD:.6,hs:.6,hsMin:3,staMove:.5,
   on(){return !this.off&&typeof Game!=='undefined'&&Game.mode==='fight'&&!Game.wave;},
   k(v){return this.on()?v:1;},
   stopT(v,d){return !this.on()||d.special?v:Math.max(Math.min(v,this.hsMin),Math.round(v*this.hs));}};
 window.__FEEL=FEEL;
 const STA_COST={j:10,h:14,t:12,dir:8,air:6,dash:10,link:3,jump:5,djump:5};
-{const _m=[['dash',10],['jump',5],['djump',5]];Object.defineProperty(STA_COST,'_feel',{value:1});for(const[k,v]of _m)Object.defineProperty(STA_COST,k,{get(){return FEEL.on()?Math.round(v*FEEL.staMove):v;},enumerable:true});}
+{const _m=[['dash',10],['jump',5],['djump',5]];Object.defineProperty(STA_COST,'_feel',{value:1});for(const[k,v]of _m)Object.defineProperty(STA_COST,k,{get(){return 0;},enumerable:true});}
 /* LUNGE ASSIST: if the opponent is a bit too far for a combo hit, the fighter dashes in automatically so it connects */
 const LUNGE_MAX=120,LUNGE_CHAIN=70;
 const PARRY_WIN=7,PARRY_LOCK=22,PARRY_HEAL=.06,PARRY_STUN=30;
@@ -3881,7 +3863,7 @@ if(this.state!==s){this.state=s;this.st=0;}}
     this.setState('airdash');this.atkBuf=0;this.hvyBuf=0;this.triBuf=0;this.dashFx();Snd.play('dash');}
   dashFx(){if(!this.preview&&this.def.onDash)this.def.onDash(this);}
   staMul(){return(this.def.staMul||1)*(this.buff&&this.def.buffStaMul?this.def.buffStaMul*Math.min(1,1.5/Math.max(1,this.mods.speed||1)):1);}   // Kaito runs on less
-  spendSta(c){if(this.preview)return true;c*=this.staMul();if(this.sta<c-1e-6){staDeny(this);return false;}this.sta-=c;this.staT=0;return true;}
+  spendSta(c){if(this.preview||c<=0)return true;c*=this.staMul();if(this.sta<c-1e-6){staDeny(this);return false;}this.sta-=c;this.staT=0;return true;}
   anyBtn(){return this.atkBuf>0||this.hvyBuf>0||this.triBuf>0;}
   bufOf(b){return b==='j'?this.atkBuf:b==='h'?this.hvyBuf:this.triBuf;}
   pickBtn(){if(this.bufOf(this.lastBtn)>0)return this.lastBtn;for(const b of['j','h','t'])if(this.bufOf(b)>0)return b;return null;}
@@ -3892,7 +3874,7 @@ if(this.state!==s){this.state=s;this.st=0;}}
     const c=this.def.djCol||this.def.sc;FX.add({type:'flat',x:this.x,y:this.y,r0:3,r1:26,life:12,col:c});
     for(let k=0;k<5;k++)FX.add({type:'mote',x:this.x+rnd(-8,8),y:this.y-rnd(0,6),vy:rnd(.4,1.2),life:10,c});}
   airDashCtl(inp){                               // one air dash per jump: short hover, then fall
-    const S=this.S,T=S.dashT+(FEEL.on()&&!this.home?FEEL.airHover:2),D=this.home?Math.max(S.dashDist*.85,this.home.D):S.dashDist*.85;this.vy=(FEEL.on()&&!this.home&&this.st<T*.6)?-.9:0;
+    const S=this.S,T=S.dashT+(FEEL.on()&&!this.home?FEEL.airHover:2),D=this.home?Math.max(S.dashDist*.85,this.home.D):S.dashDist*(FEEL.on()?FEEL.airDashD:.85);this.vy=(FEEL.on()&&!this.home&&this.st<T*.6)?-.9:0;
     this.vx=this.dashDir*(2*D/T)*Math.max(.15,1-(this.st-.5)/T)*this.mods.speed;
     if(this.grounded){this.home=null;this.landLag=(FEEL.on()?FEEL.land:4);this.setState('land');return;}
     if(this.home){this.vy=Math.abs(this.vx)*this.home.k;if((this.home.tx-this.x)*this.dashDir<=0){this.vx*=.4;this.vy=0;this.home=null;this.setState('air');return;}}
@@ -4518,7 +4500,7 @@ function readP1(){
   In.atk=0;In.padAtk=0;In.hvy=0;In.padHvy=0;In.ult=0;In.tri=0;In.padTri=0;In.jmp=0;In.padJmp=0;In.sk1=0;In.sk2=0;const F=Game.frame;
   if(l&&!In.prev.l){if(F-In.tap.l<=DASH_WINDOW){o.dash=-1;In.tap.l=-99;}else In.tap.l=F;In.tap.r=-99;}
   if(r&&!In.prev.r){if(F-In.tap.r<=DASH_WINDOW){o.dash=1;In.tap.r=-99;}else In.tap.r=F;In.tap.l=-99;}
-  if(In.padDash){o.dash=In.padDash;In.padDash=0;}{const bh=In.pad.l1|held(['ShiftLeft','ShiftRight']);o.bh=bh;if((In.padBoost||(bh&&!In.prev.bh))&&!o.dash)o.dash=(r&&!l)?1:(l&&!r)?-1:(Game.f&&Game.f[0]?Game.f[0].facing:1);In.padBoost=0;In.prev={l,r,u,bh};return o;}
+  if(In.padDash){o.dash=In.padDash;In.padDash=0;}{const F0=Game.f&&Game.f[0];if(In.lastHo!==F0){In.lastHo=F0;In.lastH=0;}if(r&&!l)In.lastH=1;else if(l&&!r)In.lastH=-1;}{const bh=In.pad.l1|held(['ShiftLeft','ShiftRight']);o.bh=bh;if((In.padBoost||(bh&&!In.prev.bh))&&!o.dash)o.dash=(r&&!l)?1:(l&&!r)?-1:(In.lastH||(Game.f&&Game.f[0]?Game.f[0].facing:1));In.padBoost=0;In.prev={l,r,u,bh};return o;}
 }
 /* ULTRA chord: two buttons pressed together. While an ultra is ready, a Shiki button waits a moment for its partner. */
 const Chord={pend:{},last:{}};
@@ -4968,21 +4950,20 @@ const Prof={key:'shin.profile',d:null,
 Prof.load();if(!cpuUnlocked(Game.cpuLv))Game.cpuLv=2;
 function profHud(){const t=document.getElementById('prof-tag');if(t)t.innerHTML=Prof.name?'<i>◆</i> <b>'+Prof.name+'</b> · '+Prof.d.title+' · '+((Prof.d.ryo|0).toLocaleString('en-US'))+' RYŌ':'<i>◆</i> NO NAME YET · PROFILE';}
 const PN={open:false,el:null,v:'',cur:0,fi:0,first:false};
-const PN_B=['pn-slots','pn-ok','pn-close','pn-dev'];
+const PN_B=['pn-slots','pn-ok','pn-close'];
 function pnBox(){if(PN.el)return PN.el;const el=document.createElement('div');el.id='namebox';
   el.innerHTML='<div class="pn-k">PROFILE · 名前</div><div class="pn-h" id="pn-h">WHO ARE YOU, FIGHTER?</div>'+
     '<div class="pn-lab">YOUR NAME · UP TO 12 LETTERS · OTHER PLAYERS SEE IT ONLINE</div>'+
     '<div id="pn-slots" tabindex="0"></div><input id="pn-type" maxlength="12" autocomplete="off" spellcheck="false">'+
     '<div class="pn-meta" id="pn-meta"></div>'+
-    '<div class="pn-row"><button id="pn-ok">CONFIRM</button><button id="pn-close">LATER · ESC</button><button id="pn-dev">TEST: UNLOCK ALL · OFF</button></div>'+
+    '<div class="pn-row"><button id="pn-ok">CONFIRM</button><button id="pn-close">LATER · ESC</button></div>'+
     '<div class="pn-hint">KEYBOARD: JUST TYPE · CONTROLLER: ← → MOVE · ↑ ↓ LETTER · ✕ CONFIRM · ○ CLOSE</div><div id="pn-msg"></div>';
   for(const ev of['keydown','keyup','pointerdown','pointermove','mousedown','click','wheel'])el.addEventListener(ev,e=>{e.stopPropagation();
     if(ev==='keydown'){if(e.code==='Escape'){e.preventDefault();pnClose();}else if(e.code==='Enter'){e.preventDefault();pnConfirm();}}});
   (document.getElementById('screen')||document.body).appendChild(el);PN.el=el;const q=id=>el.querySelector('#'+id),typ=q('pn-type');
   q('pn-slots').addEventListener('click',()=>{typ.value=PN.v;typ.focus();pnFocus(0);});
   typ.addEventListener('input',()=>{PN.v=profCleanLive(typ.value);typ.value=PN.v;PN.cur=Math.min(PN_MAX-1,PN.v.length);pnSlots();pnMsg('');});
-  q('pn-ok').addEventListener('click',pnConfirm);q('pn-close').addEventListener('click',pnClose);
-  q('pn-dev').addEventListener('click',()=>{Prof.d.dev=Prof.d.dev?0:1;Prof.save();pnDev();Snd.play('menu');});return el;}
+  q('pn-ok').addEventListener('click',pnConfirm);q('pn-close').addEventListener('click',pnClose);return el;}
 function pnDev(){const b=PN.el&&PN.el.querySelector('#pn-dev');if(b)b.textContent='TEST: UNLOCK ALL · '+(Prof.d.dev?'ON':'OFF');}
 function profCleanLive(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9 _\-.]/g,'').replace(/\s+/g,' ').replace(/^\s+/,'').slice(0,PN_MAX);}
 function pnSlots(){const el=PN.el.querySelector('#pn-slots');let h='';for(let i=0;i<PN_MAX;i++){const c=PN.v[i];h+='<span class="'+(i===PN.cur?'cur':'')+'">'+(c&&c!==' '?c:(c===' '?'&nbsp;':'·'))+'</span>';}el.innerHTML=h;}
@@ -5072,7 +5053,7 @@ const PACTS={
 const PACT_U=Object.keys(PACTS).filter(k=>!PACTS[k].ch);
 const STAT_KEYS=['speed','power','health','shin'],STAT_LAB={speed:'SPEED',power:'POWER',health:'HEALTH',shin:'SHIN'};
 /* ---------- what the player has earned ---------- */
-function vsDev(){return !!(Prof.d&&Prof.d.dev);}
+function vsDev(){return false;}
 function charLv(id){return vsDev()?100:Math.max(1,Math.min(100,(Prof.d.lv&&Prof.d.lv[id])|0||1));}
 function acctLv(){let s=0;for(const id of Sel.ids)s+=charLv(id);return s;}
 function pactSlots(id){const l=charLv(id);return l>=30?3:l>=10?2:1;}
@@ -5429,7 +5410,7 @@ function progResult(win){const d=Prof.d,A=d.ach,on=Game.online,me=Game.f[on?Net.
   if(o.to>o.from)Snd.play('level');return t;}
 /* ---------- PROFILE / LOCKER: cosmetics, shop, levels, feats ---------- */
 const LK={open:false,el:null,row:0,conf:null};
-const LK_ROWS=['name','title','card','bar','fx','frame','emote','dev'];
+const LK_ROWS=['name','title','card','bar','fx','frame','emote'];
 function lkBox(){if(LK.el)return LK.el;const el=document.createElement('div');el.id='locker';
   el.innerHTML='<div class="lk-top"><span class="lk-k">PROFILE · 記録</span><span class="lk-ryo" id="lk-ryo"></span></div><div class="lk-l" id="lk-l"></div><div class="lk-r"><div class="vs-card" id="lk-card"><canvas width="150" height="40"></canvas><div class="vs-cn"><b id="lk-cn"></b><i id="lk-ct"></i><em id="lk-cl"></em></div></div><div class="lk-pv" id="lk-pv"></div><div class="lk-info" id="lk-info"></div></div><div class="lk-foot">↑ ↓ CHOOSE · ← → CHANGE · ✕ / ENTER BUY OR EDIT · ○ / ESC CLOSE</div><div class="lk-msg" id="lk-msg"></div>';
   for(const ev of['keydown','keyup','pointerdown','mousedown','click','wheel'])el.addEventListener(ev,e=>e.stopPropagation());
@@ -5466,7 +5447,7 @@ function lkNav(ev){if(!LK.open)return;const r=LK_ROWS[LK.row];
   if((ev==='left'||ev==='right')&&COS[r]){const L=lkItems(r),c=LK.pick[r]!=null?LK.pick[r]:lkCur(r),n=(c+(ev==='right'?1:L.length-1))%L.length;LK.pick[r]=n;LK.conf=null;
     const it=L[n];if(cosOwned(r,it)){cosSet(r,it.id);lkMsg('');}else lkMsg(it.price?'✕ TO BUY FOR '+it.price+' '+RYO:'LOCKED · '+cosLock(r,it));Snd.play('menu');lkDraw();return;}
   if(ev==='ok'){if(r==='name'){lkClose();pnOpen(false);return;}
-    if(r==='dev'){Prof.d.dev=Prof.d.dev?0:1;Prof.save();Snd.play('menu');lkDraw();return;}
+
     if(COS[r]){const L=lkItems(r),c=LK.pick[r]!=null?LK.pick[r]:lkCur(r),it=L[c];if(cosOwned(r,it)){cosSet(r,it.id);lkMsg('EQUIPPED · '+(it.n||it.id));Snd.play('ok');lkDraw();return;}
       if(!it.price){lkMsg('LOCKED · '+cosLock(r,it),true);Snd.play('deny');return;}
       if((Prof.d.ryo|0)<it.price){lkMsg('NOT ENOUGH '+RYO+' · YOU HAVE '+(Prof.d.ryo|0)+' OF '+it.price,true);Snd.play('deny');return;}
@@ -18089,9 +18070,7 @@ window.__BG={stage:()=>rgStage(),surf:(x,y)=>rgSurfaceBelow(x,y),land:(x,a,b)=>r
    if(!this.introOrder)this.introOrder=L.vs.map((v,i)=>[v,112+((i*37)%26)+i*2]);
    for(const[v,at]of this.introOrder)if(k>at)soft(g,L,v.x-14,v.y-14,v.w+28,v.h+28,Math.min(1,(k-at)/10)*dark);
    g.restore();};})();
-/* TEST BUILD: every Night Parade map is open, so all of them can be walked right away */
-(function openMaps(){let ok=false;try{if(typeof RGS!=='undefined'&&RGS.d&&typeof RG_MAP_ORDER!=='undefined'){RGS.d.maps=RGS.d.maps||{};let ch=0;for(const m of RG_MAP_ORDER)if(!RGS.d.maps[m]){RGS.d.maps[m]=1;ch=1;}if(ch)RGS.save();ok=true;}}catch(e){}
- setTimeout(openMaps,250);})();
+
 
 /* the painted maps keep their own light: no extra moonbeams */
 (function noRays(){try{if(typeof RGX!=='undefined'&&RGX.C){for(const m of ['forest','snow','yomi','hell'])if(RGX.C[m])RGX.C[m].rays=0;return;}}catch(e){}setTimeout(noRays,200);})();
@@ -18705,7 +18684,7 @@ function rgNewScan(){const d=RGS.d;if(!d)return;d.known=d.known||{};d.nw=d.nw||{
 function rgIsNew(k){const n=RGS.d&&RGS.d.nw;return !!(n&&n[k]);}
 function rgTabNew(tab){const n=RGS.d&&RGS.d.nw;if(!n)return false;const pre={f:'char:',p:'pet:',b:'best:',c:'tech:',k:'pact:'}[tab];if(!pre)return false;for(const k in n)if(k.startsWith(pre))return true;return false;}
 /* an item counts as seen once it has been looked at for a moment */
-function rgSeeing(k){const H=RG.hub;if(!rgIsNew(k)){H.seenK=null;return;}if(H.seenK!==k){H.seenK=k;H.seenN=0;return;}if(++H.seenN>=45){delete RGS.d.nw[k];H.seenK=null;RGS.save();}}
+function rgSeeing(k){const H=RG.hub;if(!rgIsNew(k)){H.seenK=null;return;}delete RGS.d.nw[k];H.seenK=null;RGS.save();}
 function rgBadge(g,x,y,sz){sz=sz||14;const b=Math.round(sz*1.05);g.fillStyle='#07050a';g.fillRect(x-b/2-1,y-b/2-1,b+2,b+2);g.fillStyle=RG_NEW_COL;g.fillRect(x-b/2,y-b/2,b,b);rgText(g,'!',x,y+1,sz*.85,'#ffffff','center',false);}
 
 Object.assign(RG,{
@@ -20072,6 +20051,17 @@ tmTicker(()=>{if(document.hidden&&Tm.st==='run'){try{tick(performance.now(),fals
    else if(prev&&m&&!(m.def&&m.def.hsK)&&m.t>m.su&&m.t<=m.su+2){for(const k of PKEYS){if(k==='ba')continue;const dv=(d[k]||0)-(prev[k]||0);d[k]=(d[k]||0)+dv*.32;}}};
 }
 
+
+/* ---------- no admin leftovers in anyone's save (patch45) ---------- */
+function adminClean(){const d=Prof.d;if(!d)return;let ch=false;if(d.dev!==undefined){delete d.dev;ch=true;}
+  for(const k of ['title','card','bar','fx','frame','emote']){const L=COS[k];if(!L||!L.length)continue;const cur=cosEq(k),it=L.find(x=>String(x.id)===String(cur));
+    if(it&&!cosOwned(k,it)){const ok=L.find(x=>cosOwned(k,x))||L[0];if(k==='title')d.title=ok.id;else if(k==='card')d.card=ok.id;else{d.eq=d.eq||{};d.eq[k]=ok.id;}ch=true;}}
+  if(ch){Prof.save();try{profHud();}catch(e){}}}
+{const _pl=Prof.load;Prof.load=function(){const r=_pl.apply(this,arguments);try{adminClean();}catch(e){}return r;};try{adminClean();}catch(e){}}
+function rgMapFix(d){if(!d||d.mapFix)return;const W=d.mwins||{},M={city:1};
+  for(let i=0;i<RG_MAP_ORDER.length-1;i++)if((W[RG_MAP_ORDER[i]]|0)>0)M[RG_MAP_ORDER[i+1]]=1;
+  d.maps=M;d.mapFix=1;if(!M[d.map])d.map='city';}
+{const _rl=RGS.load;RGS.load=function(){const d=_rl.apply(this,arguments);try{rgMapFix(d);}catch(e){}return d;};try{if(RGS.d){rgMapFix(RGS.d);RGS.save();}}catch(e){}}
 })();
 </script>
 
